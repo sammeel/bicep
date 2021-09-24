@@ -7,6 +7,7 @@
  * @group Live
  */
 
+import { BicepRegistryReferenceBuilder } from "./utils/br";
 import { invokingBicepCommand } from "./utils/command";
 import {
   moduleCacheRoot,
@@ -14,7 +15,9 @@ import {
   pathToExampleFile,
   emptyDir,
   expectFileExists,
+  pathToTempFile,
 } from "./utils/fs";
+import fs from "fs";
 
 async function emptyModuleCacheRoot() {
   await emptyDir(moduleCacheRoot);
@@ -25,7 +28,7 @@ describe("bicep restore", () => {
 
   afterAll(emptyModuleCacheRoot);
 
-  it("should restore external modules referenced in a bicep file", () => {
+  it("should restore template specs", () => {
     const exampleFilePath = pathToExampleFile("external-modules", "main.bicep");
     invokingBicepCommand("restore", exampleFilePath)
       .shouldSucceed()
@@ -51,5 +54,37 @@ describe("bicep restore", () => {
         "main.json"
       )
     );
+  });
+
+  it("should restore OCI artifacts", () => {
+    const tempDir = pathToTempFile("restore");
+    fs.mkdirSync(tempDir, { recursive: true });
+
+    const builder = new BicepRegistryReferenceBuilder(
+      "biceptestdf.azurecr.io",
+      "restore"
+    );
+
+    const aksRef = builder.getBicepReference("aks", "v1");
+    const aksPath = pathToExampleFile("101", "aks", "main.json");
+    invokingBicepCommand(
+      "publish",
+      aksPath,
+      "--target",
+      aksRef
+    ).shouldSucceed();
+
+    const passthroughRef = builder.getBicepReference("passthrough", "v1");
+    const passthroughPath = pathToExampleFile(
+      "local-modules",
+      "passthrough.bicep"
+    );
+
+    invokingBicepCommand(
+      "publish",
+      passthroughPath,
+      "--target",
+      passthroughRef
+    ).shouldSucceed();
   });
 });

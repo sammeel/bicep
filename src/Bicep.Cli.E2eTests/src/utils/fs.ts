@@ -20,6 +20,11 @@ export function pathToExampleFile(...pathNames: string[]): string {
   return path.join(__dirname, "../examples", ...pathNames);
 }
 
+export function pathToTempFile(...pathNames: string[]): string {
+  const tempPath = path.join(__dirname, "../temp", ...pathNames);
+  return tempPath;
+}
+
 export function pathToCachedTsModuleFile(...pathNames: string[]): string {
   return path.join(moduleCacheRoot, "ts", ...pathNames);
 }
