@@ -16,8 +16,10 @@ import {
   emptyDir,
   expectFileExists,
   pathToTempFile,
+  pathToCachedBrModuleFile,
 } from "./utils/fs";
 import fs from "fs";
+import path from "path";
 
 async function emptyModuleCacheRoot() {
   await emptyDir(moduleCacheRoot);
@@ -26,7 +28,7 @@ async function emptyModuleCacheRoot() {
 describe("bicep restore", () => {
   beforeEach(emptyModuleCacheRoot);
 
-  afterAll(emptyModuleCacheRoot);
+  //afterAll(emptyModuleCacheRoot);
 
   it("should restore template specs", () => {
     const exampleFilePath = pathToExampleFile("external-modules", "main.bicep");
@@ -65,13 +67,13 @@ describe("bicep restore", () => {
       "restore"
     );
 
-    const aksRef = builder.getBicepReference("aks", "v1");
-    const aksPath = pathToExampleFile("101", "aks", "main.json");
+    const storageRef = builder.getBicepReference("storage", "v1");
+    const storagePath = pathToExampleFile("local-modules", "storage.bicep");
     invokingBicepCommand(
       "publish",
-      aksPath,
+      storagePath,
       "--target",
-      aksRef
+      storageRef
     ).shouldSucceed();
 
     const passthroughRef = builder.getBicepReference("passthrough", "v1");
@@ -86,5 +88,53 @@ describe("bicep restore", () => {
       "--target",
       passthroughRef
     ).shouldSucceed();
+
+    const bicepPath = path.join(tempDir, "main.bicep");
+    const bicep = `
+module passthrough '${passthroughRef}' = {
+  name: 'passthrough'
+  params: {
+    text: 'hello'
+    number: 42
+  }
+}
+
+module storage '${storageRef}' = {
+  name: 'storage'
+  params: {
+    name: passthrough.outputs.result
+  }
+}
+
+output blobEndpoint string = storage.outputs.blobEndpoint
+    `;
+
+    fs.writeFileSync(bicepPath, bicep);
+
+    invokingBicepCommand("restore", bicepPath).shouldSucceed();
+
+    const moduleFiles = ["lock", "main.json", "manifest", "metadata"];
+
+    moduleFiles.forEach((fileName) => {
+      const filePath = pathToCachedBrModuleFile(
+        builder.registry,
+        "restore$passthrough",
+        `v1_${builder.tagSuffix}$4002000`,
+        fileName
+      );
+      console.log(filePath);
+      expectFileExists(filePath);
+    });
+
+    moduleFiles.forEach((fileName) => {
+      const filePath = pathToCachedBrModuleFile(
+        builder.registry,
+        "restore$storage",
+        `v1_${builder.tagSuffix}$4002000`,
+        fileName
+      );
+      console.log(filePath);
+      expectFileExists(filePath);
+    });
   });
 });
